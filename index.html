@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>영어 문장 MP3 생성기</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔊</text></svg>" />
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; line-height: 1.5; }
+      h1 { font-size: 1.5rem; margin: 0 0 4px; }
+      .sub { margin: 0 0 20px; opacity: 0.75; }
+      textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.05rem; padding: 10px; }
+      .controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; margin: 12px 0 16px; }
+      .controls label { display: flex; align-items: center; gap: 8px; }
+      select, button { font: inherit; }
+      #generate { font-size: 1.1rem; padding: 10px 24px; cursor: pointer; }
+      #generate:disabled { cursor: progress; opacity: 0.6; }
+      .tip { font-size: 0.85rem; opacity: 0.6; margin-left: 8px; }
+      #status { min-height: 1.5em; margin: 12px 0 4px; }
+      #status.error { color: #e5484d; }
+      progress { width: 100%; }
+      #results { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 12px; }
+      #results li { border: 1px solid #8886; border-radius: 8px; padding: 12px; }
+      #results .meta { font-size: 0.85rem; opacity: 0.7; }
+      #results .text { white-space: pre-wrap; word-break: break-word; margin: 4px 0 8px; }
+      #results audio { width: 100%; }
+      #results a { display: inline-block; margin-top: 6px; font-weight: 600; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <h1>영어 문장 → MP3</h1>
+    <p class="sub">영어 문장을 자연스러운 사람 목소리 MP3로 만들어요. 음성은 이 브라우저 안에서 만들어져서 무료이고, 입력한 문장은 밖으로 전송되지 않아요.</p>
+
+    <textarea id="text" rows="7" placeholder="I'm really looking forward to seeing you this weekend."></textarea>
+
+    <div class="controls">
+      <label>목소리 <select id="voice"></select></label>
+      <label>속도 <input id="speed" type="range" min="0.5" max="1.5" step="0.05" value="1" /> <output id="speedValue">1.00×</output></label>
+      <label>
+        실행 방식
+        <select id="engine">
+          <option value="auto">자동 (추천)</option>
+          <option value="webgpu">GPU · 고품질 (WebGPU, 326MB)</option>
+          <option value="wasm-q8">CPU · 가벼움 (92MB)</option>
+          <option value="wasm-fp32">CPU · 고품질 (326MB, 느림)</option>
+        </select>
+      </label>
+    </div>
+
+    <button id="generate">MP3 만들기</button><span class="tip">Ctrl/⌘ + Enter</span>
+    <p id="status">음성 엔진 준비 중…</p>
+    <progress id="bar" max="100" hidden></progress>
+
+    <ul id="results"></ul>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
