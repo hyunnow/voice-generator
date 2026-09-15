@@ -1,5 +1,5 @@
 // Runs Kokoro TTS and MP3 encoding off the main thread so the page stays responsive.
-import { KokoroTTS, TextSplitterStream } from "https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js";
+import { KokoroTTS, TextSplitterStream, env } from "https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js";
 import { Mp3Encoder } from "https://cdn.jsdelivr.net/npm/@breezystack/lamejs@1.2.7/dist/lamejs.js";
 
 const MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
@@ -10,21 +10,35 @@ const MAX_CHUNK_CHARS = 250;
 
 // fp32 is the recommended precision on WebGPU; q8 is the light, fast option on CPU.
 const ENGINES = {
-  webgpu: { device: "webgpu", dtype: "fp32", sizeMB: 326, label: "GPU(WebGPU)" },
-  "wasm-q8": { device: "wasm", dtype: "q8", sizeMB: 92, label: "CPU(q8)" },
-  "wasm-fp32": { device: "wasm", dtype: "fp32", sizeMB: 326, label: "CPU(fp32)" },
+  webgpu: { device: "webgpu", dtype: "fp32", sizeMB: 326 },
+  "wasm-q8": { device: "wasm", dtype: "q8", sizeMB: 92 },
+  "wasm-fp32": { device: "wasm", dtype: "fp32", sizeMB: 326 },
 };
 
+// Safari, and every iOS browser since they all run on WebKit, spins forever inside onnxruntime's default
+// JSEP WebAssembly build (microsoft/onnxruntime#26827). The plain build of the same onnxruntime version that
+// kokoro-js bundles works there, but it has no WebGPU support, so WebKit browsers always run on the CPU.
+const IS_WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome\/|Chromium\//.test(navigator.userAgent);
+if (IS_WEBKIT) {
+  const ort = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/";
+  env.wasmPaths = { mjs: `${ort}ort-wasm-simd-threaded.mjs`, wasm: `${ort}ort-wasm-simd-threaded.wasm` };
+}
+
 let tts = null;
-let current = null;
-let gpuFailed = false;
+let engine = null; // engine of the loaded model, or of the one being loaded
 let queue = Promise.resolve();
 
-const post = (message) => self.postMessage(message);
+// Every message names the engine involved so the page can fall back to the CPU when the GPU fails.
+const post = (message) => self.postMessage({ ...message, engine });
 
 self.onmessage = ({ data }) => {
   queue = queue.then(() => handle(data));
 };
+
+// Some onnxruntime failures only surface as unhandled rejections and leave the awaited call pending forever.
+self.addEventListener("unhandledrejection", (event) => {
+  post({ type: "error", message: describe(event.reason) });
+});
 
 async function handle(message) {
   try {
@@ -32,39 +46,33 @@ async function handle(message) {
     if (message.type === "generate") await generate(message);
   } catch (err) {
     console.error(err);
-    post({ type: "error", job: message.type === "generate" ? message : null, message: err?.message ?? String(err) });
+    post({ type: "error", message: describe(err) });
   }
 }
 
-async function hasWebGPU() {
+function describe(err) {
+  return err?.message ?? String(err);
+}
+
+async function resolveEngine(choice) {
+  if (IS_WEBKIT) return choice === "wasm-fp32" ? "wasm-fp32" : "wasm-q8";
+  if (choice !== "auto") return choice;
   try {
-    return Boolean(navigator.gpu && (await navigator.gpu.requestAdapter()));
+    return (await navigator.gpu?.requestAdapter()) ? "webgpu" : "wasm-q8";
   } catch {
-    return false;
+    return "wasm-q8";
   }
 }
 
 async function ensureModel(choice) {
-  const key = choice === "auto" ? (!gpuFailed && (await hasWebGPU()) ? "webgpu" : "wasm-q8") : choice;
-  if (tts && current === key) return;
-  try {
-    await loadModel(key);
-  } catch (err) {
-    if (key === "wasm-q8") throw err;
-    console.warn(err);
-    if (key === "webgpu") gpuFailed = true;
-    post({ type: "notice", message: `${ENGINES[key].label} 로딩에 실패해서 CPU(q8)로 바꿀게요…` });
-    await loadModel("wasm-q8");
-  }
-}
-
-async function loadModel(key) {
+  const key = await resolveEngine(choice);
+  if (tts && engine === key) return;
   if (tts) {
     await tts.model.dispose();
     tts = null;
-    current = null;
   }
-  const { device, dtype, sizeMB, label } = ENGINES[key];
+  engine = key;
+  const { device, dtype, sizeMB } = ENGINES[key];
   post({ type: "loading", percent: 0, sizeMB });
   tts = await KokoroTTS.from_pretrained(MODEL_ID, {
     device,
@@ -76,32 +84,19 @@ async function loadModel(key) {
       }
     },
   });
-  current = key;
-  post({ type: "ready", engine: label });
+  post({ type: "ready" });
 }
 
 async function generate(job) {
   await ensureModel(job.engine);
   const started = performance.now();
-  let samples;
-  try {
-    samples = await synthesize(job);
-  } catch (err) {
-    if (current !== "webgpu") throw err;
-    console.warn(err);
-    gpuFailed = true;
-    post({ type: "notice", message: "GPU에서 오류가 나서 CPU(q8)로 다시 만들게요…" });
-    await loadModel("wasm-q8");
-    samples = await synthesize(job);
-  }
-  const blob = encodeMp3(samples);
+  const samples = await synthesize(job);
   post({
     type: "result",
     job,
-    blob,
+    blob: encodeMp3(samples),
     seconds: samples.length / SAMPLE_RATE,
     elapsed: (performance.now() - started) / 1000,
-    engine: ENGINES[current].label,
   });
 }
 

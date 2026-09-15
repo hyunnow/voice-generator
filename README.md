@@ -10,6 +10,8 @@
 - **고품질 음성** — 오픈소스 TTS 모델 [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)(Apache-2.0)을 사용합니다.
 - **브라우저에서 직접 실행** — WebGPU(지원 시) 또는 WebAssembly로 내 컴퓨터에서 음성을 만듭니다. 입력한 문장은 외부로 전송되지 않습니다.
 - 음성 모델(92MB~326MB)은 처음 한 번만 내려받고, 이후에는 브라우저에 저장되어 바로 실행됩니다.
+- Chrome·Edge에서는 GPU로 빠르게 실행됩니다. Safari와 아이폰·아이패드의 모든 브라우저는 WebKit 버그([onnxruntime#26827](https://github.com/microsoft/onnxruntime/issues/26827)) 때문에 CPU로 실행되어 조금 더 느립니다.
+- GPU가 멈추거나 오류가 나면 자동으로 CPU로 바꿔서 이어서 만듭니다.
 
 ## 사용법
 
