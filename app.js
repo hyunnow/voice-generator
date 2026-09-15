@@ -93,7 +93,15 @@ function generate() {
     .replace(/\p{Script=Hangul}+/gu, " ")
     .replace(/\(\s*\)|\[\s*\]/g, " ")
     .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
+    // Tidy punctuation orphaned by the removal: "apples. 사과." -> "apples. ." -> "apples.", "apple (사과), pear" -> "apple, pear"
+    .map((line) =>
+      line
+        .replace(/\s+/g, " ")
+        .replace(/([.,!?;:])(\s+[.,!?;:])+/g, "$1")
+        .replace(/\s+(?=[.,!?;:])/g, "")
+        .replace(/^[\s.,!?;:]+/, "")
+        .trim(),
+    )
     .filter((line) => /[A-Za-z0-9]/.test(line))
     .join("\n");
 
