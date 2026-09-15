@@ -71,7 +71,7 @@ function engineChoice() {
 
 function startWorker() {
   worker?.terminate();
-  worker = new Worker(new URL("./worker.js?v=2", import.meta.url), { type: "module" });
+  worker = new Worker(new URL("./worker.js?v=3", import.meta.url), { type: "module" });
   worker.onmessage = ({ data }) => onWorkerMessage(data);
   worker.onerror = (event) => onEngineFailure(event.message || "음성 엔진을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.");
   engine = null;

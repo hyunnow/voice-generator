@@ -1,4 +1,5 @@
 // Runs Kokoro TTS and MP3 encoding off the main thread so the page stays responsive.
+import "./polyfills.js?v=3"; // must stay the first import: it patches WebKit before kokoro-js runs
 import { KokoroTTS, TextSplitterStream, env } from "https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js";
 import { Mp3Encoder } from "https://cdn.jsdelivr.net/npm/@breezystack/lamejs@1.2.7/dist/lamejs.js";
 
